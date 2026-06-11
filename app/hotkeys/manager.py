@@ -114,10 +114,14 @@ class _KeyboardLibBackend:
         self._pending.clear()
 
 
-_VK_DIGITS = {
-    0x30: "0", 0x31: "1", 0x32: "2", 0x33: "3", 0x34: "4",
-    0x35: "5", 0x36: "6", 0x37: "7", 0x38: "8", 0x39: "9",
-}
+# VK codes for digits (0x30–0x39) and letters (0x41–0x5A) are fixed on Windows
+# and stable across keyboard layouts and modifier states.  Using them instead of
+# key.char avoids two classes of bugs:
+#   • Shift+9 → key.char='(' instead of '9'
+#   • Ctrl+Q  → key.char='\x11' (control char) instead of 'q'
+_VK_DIGITS = {c: str(c - 0x30) for c in range(0x30, 0x3A)}
+_VK_LETTERS = {c: chr(c - 0x41 + ord("a")) for c in range(0x41, 0x5B)}
+_VK_MAP = {**_VK_DIGITS, **_VK_LETTERS}
 
 
 def _canonical_key(key: keyboard.Key | keyboard.KeyCode) -> str | None:
@@ -130,10 +134,8 @@ def _canonical_key(key: keyboard.Key | keyboard.KeyCode) -> str | None:
     if key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
         return "cmd"
     if isinstance(key, keyboard.KeyCode):
-        # Check VK before char: when Shift is held, key.char becomes the shifted symbol
-        # (e.g. Shift+9 → "(") while key.vk still carries the unshifted digit code.
-        if key.vk is not None and key.vk in _VK_DIGITS:
-            return _VK_DIGITS[key.vk]
+        if key.vk is not None and key.vk in _VK_MAP:
+            return _VK_MAP[key.vk]
         if key.char and len(key.char) == 1:
             return key.char.lower()
     return None
