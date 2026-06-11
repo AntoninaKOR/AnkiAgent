@@ -1,0 +1,12 @@
+hotkeys:
+  preview: cmd+shift+9
+  quick_add: cmd+shift+q
+note_type: вввв
+selected_deck: test0
+restore_clipboard: true
+anki:
+  url: http://127.0.0.1:8765
+behavior:
+  preview_before_add: true
+  quick_add_enabled: true
+  save_history: true
