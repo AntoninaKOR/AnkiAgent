@@ -22,6 +22,18 @@ pip install -r requirements.txt
 sudo apt install xdotool xclip
 ```
 
+**Linux — grant input device access (required for global hotkeys on Wayland and X11):**
+
+The `keyboard` library reads `/dev/input/` directly and works on both X11 and Wayland.
+It requires the user to be in the `input` group:
+
+```bash
+sudo usermod -a -G input $USER
+```
+
+Then **log out and log back in** for the group change to take effect.
+After that, run `pip install -r requirements.txt` to install the `keyboard` package.
+
 In Anki, create a deck or pick an existing one. Choose a note type in **Settings** (default: `Basic`).
 
 ## Run

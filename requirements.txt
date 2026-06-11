@@ -6,3 +6,4 @@ PyYAML>=6.0.1
 pydantic>=2.5.0
 pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"
 pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+keyboard>=0.13.5; sys_platform == "linux"
