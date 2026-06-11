@@ -6,6 +6,7 @@ Local desktop app that turns selected text into Anki cards via global hotkeys.
 
 - Python 3.11+
 - [Anki](https://apps.ankiweb.net/) with the [AnkiConnect](https://foosoft.net/projects/anki-connect/) add-on
+- **Linux only:** `xdotool` and `xclip` (or `xsel`) for clipboard and hotkey support
 
 ## Install
 
@@ -13,6 +14,12 @@ Local desktop app that turns selected text into Anki cards via global hotkeys.
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+**Linux — install system dependencies:**
+
+```bash
+sudo apt install xdotool xclip
 ```
 
 In Anki, create a deck or pick an existing one. Choose a note type in **Settings** (default: `Basic`).
@@ -38,7 +45,9 @@ Configured in `config.yaml`:
 
 Change shortcuts, **deck**, and **note type** in **Anki Agent → Settings…** (or tray menu). Use **New deck…** or **New note type…** to create them in Anki (Anki must be running).
 
-On macOS, copy simulation uses **Cmd+C** from the focused app.
+**macOS** — copy simulation uses **Cmd+C** (via Quartz); grant Accessibility to Terminal in System Settings → Privacy & Security if hotkeys do nothing.  
+**Linux** — highlighted text is read from the X11/Wayland PRIMARY selection via `xclip`/`xsel`/`wl-paste`; no Ctrl+C simulation needed.  
+**Windows** — copy simulation uses **Ctrl+C** via pynput.
 
 ## Flow
 
@@ -111,7 +120,7 @@ app/
     fake.py                  # FakeLLMClient (placeholder)
   clients/
     anki_connect.py          # AnkiConnect HTTP client
-    clipboard.py             # Selection capture via Cmd+C / Ctrl+C
+    clipboard.py             # Selection capture (PRIMARY selection on Linux, Cmd/Ctrl+C elsewhere)
   hotkeys/
     manager.py               # GlobalHotkeyManager (picks backend by OS)
     macos.py                 # macOS NSEvent backend
@@ -133,3 +142,7 @@ data/
 ## Notes
 
 - Replace `FakeLLMClient` (`app/llm/fake.py`) with a real LLM by implementing the `LLMClient` protocol from `app/llm/base.py` and passing the instance to `CardCreationService`.
+
+## TODO
+
+- **Native Wayland global hotkeys.** Currently hotkeys on Linux rely on pynput → XRecord (X11 extension), which works in Wayland sessions only because XWayland is usually running alongside. A proper Wayland-native solution would use the [XDG Desktop Portal `GlobalShortcuts`](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html) DBus API (`org.freedesktop.portal.GlobalShortcuts`), but not universally available. pynput does not implement this yet, so it would require a custom DBus integration.

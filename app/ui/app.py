@@ -292,14 +292,31 @@ class AnkiAgentApp:
 
         errors = self._register_hotkeys()
         if errors:
+            import platform as _platform
+            _os = _platform.system()
+            if _os == "Darwin":
+                os_hint = (
+                    "On macOS, grant Accessibility to Terminal or Cursor in "
+                    "System Settings → Privacy & Security → Accessibility."
+                )
+            elif _os == "Linux":
+                os_hint = (
+                    "On Linux, pynput needs access to X11 keyboard events.\n"
+                    "• X11/XWayland must be running (XRecord extension required).\n"
+                    "• Install xdotool and xclip for clipboard support:\n"
+                    "  sudo apt install xdotool xclip\n"
+                    "• If you see a DBusException, check that a DBus session is active."
+                )
+            else:
+                os_hint = "Open Settings (menu bar or tray) to fix hotkeys."
             QMessageBox.warning(
                 self.status_window,
                 "Hotkeys unavailable",
                 (
                     "Global hotkeys could not be registered:\n\n"
                     + "\n".join(errors)
-                    + "\n\nOpen Settings (menu bar or tray) to fix hotkeys.\n"
-                    "On macOS, grant Accessibility to Terminal or Cursor."
+                    + "\n\n"
+                    + os_hint
                 ),
             )
 

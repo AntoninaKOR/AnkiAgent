@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import platform
 import re
+import shutil
+import subprocess
 import time
 
 import pyperclip
@@ -61,7 +64,66 @@ def _simulate_copy_macos() -> None:
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 
 
+def _read_primary_selection_linux() -> str | None:
+    """Read X11/Wayland primary selection (highlighted text) without simulating keystrokes.
+
+    On Linux, any highlighted text is immediately placed in the PRIMARY selection buffer,
+    so we can read it directly without Ctrl+C — and without triggering an XRecord/XTest
+    conflict that causes segfaults when a pynput Listener is already running.
+    """
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
+        try:
+            r = subprocess.run(
+                ["wl-paste", "--primary", "--no-newline"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.returncode == 0:
+                return r.stdout
+        except Exception:
+            pass
+
+    if shutil.which("xclip"):
+        try:
+            r = subprocess.run(
+                ["xclip", "-selection", "primary", "-o"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.returncode == 0:
+                return r.stdout
+        except Exception:
+            pass
+
+    if shutil.which("xsel"):
+        try:
+            r = subprocess.run(
+                ["xsel", "--primary", "--output"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.returncode == 0:
+                return r.stdout
+        except Exception:
+            pass
+
+    return None
+
+
 def _simulate_copy_other() -> None:
+    """Linux/Windows: simulate Ctrl+C to copy the active selection to clipboard.
+
+    On Linux, prefer xdotool via subprocess to avoid the XRecord/XTest conflict
+    that occurs when pynput's Controller is used while a pynput Listener is running
+    """
+    if platform.system() == "Linux" and shutil.which("xdotool"):
+        try:
+            r = subprocess.run(
+                ["xdotool", "key", "--clearmodifiers", "ctrl+c"],
+                capture_output=True, timeout=2,
+            )
+            if r.returncode == 0:
+                return
+        except Exception:
+            pass
+
     from pynput.keyboard import Controller, Key
 
     controller = Controller()
@@ -79,14 +141,39 @@ def _simulate_copy() -> None:
     except ClipboardError:
         raise
     except Exception as exc:
-        raise ClipboardError(
-            "Could not send copy shortcut. Enable Accessibility for Cursor or Terminal "
-            "in System Settings, then restart the app."
-        ) from exc
+        _os = platform.system()
+        if _os == "Darwin":
+            hint = (
+                "Enable Accessibility for Cursor or Terminal "
+                "in System Settings → Privacy & Security, then restart the app."
+            )
+        elif _os == "Linux":
+            hint = (
+                "Could not send copy shortcut. "
+                "Install xdotool (sudo apt install xdotool) or grant X11 access."
+            )
+        else:
+            hint = "Could not send copy shortcut."
+        raise ClipboardError(hint) from exc
 
 
 def capture_selected_text(restore_clipboard: bool = True) -> str:
-    """Copy the current selection and return clipboard text."""
+    """Copy the current selection and return clipboard text.
+
+    On Linux, highlighted text lands in the X11/Wayland PRIMARY selection automatically,
+    so we read it directly with xclip/xsel/wl-paste without simulating Ctrl+C.  This
+    avoids the XRecord ↔ XTest conflict that causes a segmentation fault when a pynput
+    Listener is already running.  If PRIMARY is unavailable we fall back to the
+    Ctrl+C-then-read-clipboard path.
+    """
+    if platform.system() == "Linux":
+        primary = _read_primary_selection_linux()
+        if primary is not None:
+            text = primary.strip()
+            if text:
+                _validate_selection(text)
+                return text
+
     previous = pyperclip.paste()
 
     _simulate_copy()
