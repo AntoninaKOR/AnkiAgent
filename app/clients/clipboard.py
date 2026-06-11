@@ -111,7 +111,12 @@ def _simulate_copy_other() -> None:
     """Linux/Windows: simulate Ctrl+C to copy the active selection to clipboard.
 
     On Linux, prefer xdotool via subprocess to avoid the XRecord/XTest conflict
-    that occurs when pynput's Controller is used while a pynput Listener is running
+    that occurs when pynput's Controller is used while a pynput Listener is running.
+
+    On Windows, the hotkey that triggered this call (e.g. Ctrl+Shift+9) may still
+    have Shift physically held at the moment we run. Sending Ctrl+C with Shift held
+    makes browsers receive Ctrl+Shift+C (opens DevTools) instead of copying.
+    We release all extra modifiers first via SendInput before pressing Ctrl+C.
     """
     if platform.system() == "Linux" and shutil.which("xdotool"):
         try:
@@ -127,6 +132,15 @@ def _simulate_copy_other() -> None:
     from pynput.keyboard import Controller, Key
 
     controller = Controller()
+
+    if platform.system() == "Windows":
+        # Release Shift and Alt so they do not combine with the synthetic Ctrl+C.
+        for mod in (Key.shift, Key.shift_l, Key.shift_r, Key.alt, Key.alt_l, Key.alt_r):
+            try:
+                controller.release(mod)
+            except Exception:
+                pass
+
     with controller.pressed(Key.ctrl):
         controller.press("c")
         controller.release("c")
@@ -188,6 +202,13 @@ def capture_selected_text(restore_clipboard: bool = True) -> str:
         raise ClipboardError(
             "Nothing was copied. Highlight a word, "
             "click that window so it is active, then try again."
+        )
+
+    if text == (previous or "").strip():
+        raise ClipboardError(
+            "Clipboard did not change after the copy shortcut — "
+            "the app that holds your selection may have ignored it.\n"
+            "Make sure the word is highlighted and that window is focused, then try again."
         )
 
     _validate_selection(text)
