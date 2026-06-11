@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent
@@ -58,9 +61,13 @@ class AnkiAgentApp:
 
     def _notify(self, title: str, message: str) -> None:
         if self.tray is not None and self.tray.isVisible():
-            self.tray.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 4000)
-        else:
-            QMessageBox.information(None, title, message)
+            try:
+                # On Linux, showMessage goes through org.freedesktop.Notifications via DBus, which may fail if the notification daemon is absent.
+                self.tray.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 4000)
+                return
+            except Exception as exc:
+                logger.warning("tray.showMessage failed, falling back to dialog: %s", exc)
+        QMessageBox.information(None, title, message)
 
     @staticmethod
     def _selectable_label(text: str) -> QLabel:
@@ -271,11 +278,17 @@ class AnkiAgentApp:
             parent_widget=self.status_window,
         )
         icon = self.qt_app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
-        self.tray = QSystemTrayIcon(icon)
-        self.tray.setToolTip("Anki Agent")
-        self.tray.setContextMenu(self._build_tray_menu())
-        self.tray.activated.connect(self._on_tray_activated)
-        self.tray.show()
+        try:
+            # QSystemTrayIcon requires a running DBus session on Linux; guard against environments where the system tray or notification daemon is unavailable.
+            if QSystemTrayIcon.isSystemTrayAvailable():
+                self.tray = QSystemTrayIcon(icon)
+                self.tray.setToolTip("Anki Agent")
+                self.tray.setContextMenu(self._build_tray_menu())
+                self.tray.activated.connect(self._on_tray_activated)
+                self.tray.show()
+        except Exception as exc:
+            logger.warning("System tray unavailable, notifications will use dialogs: %s", exc)
+            self.tray = None
 
         errors = self._register_hotkeys()
         if errors:
