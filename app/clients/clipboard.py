@@ -204,7 +204,11 @@ def capture_selected_text(restore_clipboard: bool = True) -> str:
             "click that window so it is active, then try again."
         )
 
-    if text == (previous or "").strip():
+    # On Windows the copy simulation can silently fail (e.g. modifier keys still held
+    # cause Ctrl+Shift+C instead of Ctrl+C).  Detect this by checking whether the
+    # clipboard content actually changed.  Skip the check on macOS and Linux where
+    # the copy mechanism is more reliable (Quartz / PRIMARY selection / xdotool).
+    if platform.system() == "Windows" and text == (previous or "").strip():
         raise ClipboardError(
             "Clipboard did not change after the copy shortcut — "
             "the app that holds your selection may have ignored it.\n"
